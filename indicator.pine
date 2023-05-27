@@ -1,0 +1,81 @@
+//@version=5
+indicator("Bollinger Bands + MACD Angle with Stop Loss", overlay=true)
+
+// Bollinger Bands
+length = input(20, "BB Length")
+mult = input(1.7, "BB Multiplier")
+basis = ta.sma(close, length)
+dev = mult * ta.stdev(close, length)
+upperBB = basis + dev
+lowerBB = basis - dev
+middle = basis
+
+// MACD
+macdShort = input(24, "MACD Short")
+macdLong = input(52, "MACD Long")
+macdSignal = input(18, "MACD Signal")
+
+[macdLine, signalLine, _] = ta.macd(close, macdShort, macdLong, macdSignal)
+
+// Calculate MACD angle
+macdAngle = ta.change(macdLine) / ta.change(bar_index)
+plot(macdAngle,title = "MACD ANGLE")
+// Buy signal condition
+buyCondition = ta.crossover(close, lowerBB) and macdAngle < 5
+plotshape(buyCondition, title="Buy Signal", color=color.green, style=shape.labelup,location = location.belowbar, size=size.small,text="Buy",textcolor = color.white)
+alertcondition(buyCondition, title="Buy Signal", message="Buy Signal")
+
+// Short signal condition
+shortCondition = ta.crossunder(close, upperBB) and macdAngle > -5
+plotshape(shortCondition, title="Short Signal", color=color.red, style=shape.labeldown, size=size.small,text = "Short",textcolor = color.white)
+alertcondition(shortCondition, title="Sell Signal", message="Sell Signal")
+// Stop loss variables
+var bool stopLossBuy = false
+var bool stopLossSell = false
+var float stopLossLevelBuy = na
+var float stopLossLevelSell = na
+
+// Calculate stop loss levels and trigger stop loss signals
+if buyCondition and not stopLossBuy and not shortCondition
+    stopLossLevelBuy := low - 70
+    stopLossBuy := true
+
+if shortCondition and not stopLossSell and not buyCondition
+    stopLossLevelSell := high + 70
+    stopLossSell := true
+
+// Reset stop loss variables if a new signal occurs
+if buyCondition or shortCondition
+    stopLossBuy := false
+    stopLossSell := false
+
+// Check stop loss conditions
+if stopLossBuy and high < stopLossLevelBuy and not shortCondition
+    stopLossBuy := false
+
+if stopLossSell and low > stopLossLevelSell and not buyCondition
+    stopLossSell := false
+
+// Plot stop loss markers
+plotshape(stopLossBuy, title="Stop Loss Buy", color=color.red, style=shape.xcross, size=size.small)
+plotshape(stopLossSell, title="Stop Loss Sell", color=color.green, style=shape.xcross, size=size.small)
+
+// Plot Bollinger Bands with fill
+p1=plot(upperBB, color=color.blue, title="Upper Bollinger Band")
+p2=plot(lowerBB, color=color.blue, title="Lower Bollinger Band")
+plot(middle, title="Middle Band", color=color.red)
+fill(p1,p2,color=color.new(color.blue,95))
+// Check previous three candles' open and close range
+prevOpenCloseInRange = (open[1] > middle[1] and close[1] < middle[1] and open[2] < middle[2] and close[2] > middle[2] and open[3] > middle[3] and close[3] < middle[3]) or
+                       (open[1] < middle[1] and close[1] > middle[1] and open[2] > middle[2] and close[2] < middle[2] and open[3] < middle[3] and close[3] > middle[3])
+
+// Check current candle's favorability
+currentCandleFavorsPrevious = (open > middle[1] and close < middle[1]) or (open < middle[1] and close > middle[1])
+
+// Generate "Risk" signal
+if prevOpenCloseInRange and not currentCandleFavorsPrevious
+    label.new(bar_index[2], middle[2], "Risk", color=color.white, textcolor=color.black)
+
+
+//MACD below graph
+
